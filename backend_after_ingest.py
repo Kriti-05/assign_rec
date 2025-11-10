@@ -1,32 +1,30 @@
+# backend.py
 from flask import Flask, request, jsonify
 from sentence_transformers import SentenceTransformer
 from pinecone import Pinecone
 import os
-import re
 
-# Try to import streamlit for secrets, but don't fail if not available
+# ---------------- STREAMLIT SECRETS ----------------
 try:
     import streamlit as st
     STREAMLIT_AVAILABLE = True
 except ImportError:
     STREAMLIT_AVAILABLE = False
 
-app = Flask(__name__)
-
-# ---------------- CONFIG ----------------
-# Use Streamlit secrets for deployment, fallback to .env for local
-if STREAMLIT_AVAILABLE and hasattr(st, 'secrets'):
-    # Running in Streamlit deployment
+if STREAMLIT_AVAILABLE and hasattr(st, "secrets"):
     PINECONE_API_KEY = st.secrets.get("PINECONE_API_KEY")
     INDEX_NAME = st.secrets.get("PINECONE_INDEX", "shl-assessments")
-    print("✅ Using Streamlit secrets for configuration")
+    print("✅ Using Streamlit secrets")
 else:
-    # Local development
+    # Local fallback using .env
     from dotenv import load_dotenv
     load_dotenv()
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
     INDEX_NAME = os.getenv("PINECONE_INDEX", "shl-assessments")
-    print("✅ Using .env for local configuration")
+    print("✅ Using .env for local dev")
+
+# ---------------- FLASK APP ----------------
+app = Flask(__name__)
 
 # ---------------- PINECONE + EMBEDDINGS ----------------
 pc = Pinecone(api_key=PINECONE_API_KEY)
@@ -47,62 +45,59 @@ TEST_TYPE_MAPPING = {
 
 # ---------------- HELPERS ----------------
 def map_test_types(codes):
-    """Map test type letters to full names."""
     return [TEST_TYPE_MAPPING.get(c, "Unknown") for c in codes]
 
 def normalize_adaptive(adaptive):
-    """If adaptive_support is unknown, return 'No'."""
     if adaptive.lower() == "unknown":
         return "No"
     return adaptive
 
+# ---------------- RECOMMEND FUNCTION ----------------
+def get_recommendations(query, k=5, test_type=[]):
+    vec = embedder.encode([query])[0].tolist()
+    res = index.query(vector=vec, top_k=k*2, include_metadata=True)
+    matches = []
+
+    for m in res.matches:
+        meta = m.metadata
+        score = m.score
+
+        # Boost score based on test type overlap
+        if any(t in meta.get("test_type", []) for t in test_type):
+            score += 0.15
+
+        matches.append((score, meta))
+
+    ranked = sorted(matches, key=lambda x: x[0], reverse=True)
+    recommendations = []
+
+    for _, m in ranked[:k]:
+        recommendations.append({
+            "url": m["url"],
+            "name": m["name"],
+            "adaptive_support": normalize_adaptive(m.get("adaptive_support", "No")),
+            "description": m.get("description", ""),
+            "duration": m.get("duration", 0),
+            "remote_support": m.get("remote_support", "No"),
+            "test_type": map_test_types(m.get("test_type", []))
+        })
+
+    return recommendations
+
 # ---------------- RECOMMEND ENDPOINT ----------------
 @app.route("/recommend", methods=["POST"])
-def recommend():
+def recommend_endpoint():
     data = request.get_json()
     query = data.get("query", "")
     k = int(data.get("k", 5))
+    test_type = data.get("test_type", [])
 
     if not query:
         return jsonify({"error": "Query is required"}), 400
 
-    # 1️⃣ Embed query
-    vec = embedder.encode([query])[0].tolist()
-
-    # 2️⃣ Query Pinecone
     try:
-        res = index.query(vector=vec, top_k=k*2, include_metadata=True)
-        matches = []
-
-        for m in res.matches:
-            meta = m.metadata
-            score = m.score
-
-            # Boost based on test type overlap
-            query_test_types = data.get("test_type", [])
-            if any(t in meta.get("test_type", []) for t in query_test_types):
-                score += 0.15
-
-            matches.append((score, meta))
-
-        # Sort by score and take top-k
-        ranked = sorted(matches, key=lambda x: x[0], reverse=True)
-
-        # Format response
-        recommendations = []
-        for _, m in ranked:
-            recommendations.append({
-                "url": m["url"],
-                "name": m["name"],
-                "adaptive_support": normalize_adaptive(m.get("adaptive_support", "No")),
-                "description": m.get("description", ""),
-                "duration": m.get("duration", 0),
-                "remote_support": m.get("remote_support", "No"),
-                "test_type": map_test_types(m.get("test_type", []))
-            })
-
-        return jsonify({"recommended_assessments": recommendations})
-
+        recs = get_recommendations(query, k=k, test_type=test_type)
+        return jsonify({"recommended_assessments": recs})
     except Exception as e:
         print("❌ Pinecone query failed:", e)
         return jsonify({"error": str(e)}), 500
@@ -110,9 +105,9 @@ def recommend():
 # ---------------- HEALTH CHECK ----------------
 @app.route("/health", methods=["GET"])
 def health_check():
-    """Return simple health status of the API."""
-    return jsonify({"status": "healthy", "message": "Flask backend is running"}), 200
+    return jsonify({"status": "healthy"}), 200
 
-
+# ---------------- MAIN ----------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))  # Railway/Render will set PORT
+    app.run(host="0.0.0.0", port=port)
