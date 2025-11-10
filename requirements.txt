@@ -1,3 +1,6 @@
+# Use PyTorch CPU index for Python 3.13
+-f https://download.pytorch.org/whl/cpu/torch_stable.html
+
 Flask==2.3.3
 requests==2.31.0
 pandas==2.2.3
@@ -8,7 +11,7 @@ streamlit==1.29.0
 tqdm==4.66.1
 sentence-transformers==2.7.0
 transformers==4.57.1
-torch==2.2.0
-torchvision==0.15.2
+torch==2.9.0+cpu
+torchvision==0.18.0+cpu
 groq
 pytesseract
