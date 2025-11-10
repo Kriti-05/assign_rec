@@ -1,15 +1,27 @@
 import streamlit as st
 import pandas as pd
 import requests
+import threading
+import time
+from backend import app  # Import your Flask app
 
-# ---------------- CONFIG ----------------
+# ---------------- RUN FLASK IN BACKGROUND ----------------
+def run_flask():
+    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+
+# Start Flask in background thread when Streamlit starts
+if 'flask_started' not in st.session_state:
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    st.session_state.flask_started = True
+    time.sleep(2)  # Give Flask time to start
+
+# ---------------- STREAMLIT UI ----------------
 st.set_page_config(page_title="SHL HR Recommender", page_icon="🧠", layout="wide")
 st.title("🧠 SHL HR Recommender Demo")
 
-API_URL = st.text_input(
-    "Enter your API base URL (e.g., http://localhost:5000)", 
-    "http://localhost:5000"
-)
+# Use local Flask server
+API_URL = "http://localhost:5000"
 
 # ---------------- HEALTH CHECK ----------------
 st.header("🔧 API Health Check")
@@ -45,13 +57,7 @@ if st.button("🔍 Get Recommendations for Single Query"):
                     st.success(f"✅ Got {len(recs)} recommendations")
                     if recs:
                         df = pd.DataFrame(recs)
-                        df = df.rename(columns={
-                            "url": "Assessment_url",
-                            "name": "Assessment Name",
-                            "test_type": "Test Type",
-                            "adaptive_support": "Adaptive Support",
-                            "remote_support": "Remote Support"
-                        })
+                         
                         st.dataframe(df, use_container_width=True)
                     else:
                         st.info("No recommendations found.")
