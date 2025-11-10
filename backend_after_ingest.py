@@ -1,17 +1,32 @@
-# backend.py
 from flask import Flask, request, jsonify
-from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 from pinecone import Pinecone
 import os
 import re
 
-load_dotenv()
+# Try to import streamlit for secrets, but don't fail if not available
+try:
+    import streamlit as st
+    STREAMLIT_AVAILABLE = True
+except ImportError:
+    STREAMLIT_AVAILABLE = False
+
 app = Flask(__name__)
 
 # ---------------- CONFIG ----------------
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-INDEX_NAME = os.getenv("PINECONE_INDEX", "shl-assessments")
+# Use Streamlit secrets for deployment, fallback to .env for local
+if STREAMLIT_AVAILABLE and hasattr(st, 'secrets'):
+    # Running in Streamlit deployment
+    PINECONE_API_KEY = st.secrets.get("PINECONE_API_KEY")
+    INDEX_NAME = st.secrets.get("PINECONE_INDEX", "shl-assessments")
+    print("✅ Using Streamlit secrets for configuration")
+else:
+    # Local development
+    from dotenv import load_dotenv
+    load_dotenv()
+    PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+    INDEX_NAME = os.getenv("PINECONE_INDEX", "shl-assessments")
+    print("✅ Using .env for local configuration")
 
 # ---------------- PINECONE + EMBEDDINGS ----------------
 pc = Pinecone(api_key=PINECONE_API_KEY)
@@ -96,7 +111,7 @@ def recommend():
 @app.route("/health", methods=["GET"])
 def health_check():
     """Return simple health status of the API."""
-    return jsonify({"status": "healthy"}), 200
+    return jsonify({"status": "healthy", "message": "Flask backend is running"}), 200
 
 
 if __name__ == "__main__":
