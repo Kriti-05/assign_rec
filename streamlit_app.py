@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import threading
 import time
-from backend import app  # Import your Flask app
+from backend_after_ingest import app  # Import your Flask app
 
 # ---------------- RUN FLASK IN BACKGROUND ----------------
 def run_flask():
