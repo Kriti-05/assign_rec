@@ -12,7 +12,7 @@ INDEX_NAME = os.getenv("PINECONE_INDEX", "shl-assessments")
 # ---------------- PINECONE + EMBEDDINGS ----------------
 pc = Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index(INDEX_NAME)
-embedder = SentenceTransformer("all-MiniLM-L6-v2")
+embedder = SentenceTransformer("all-MiniLM-L6-v2",device="cpu")
 
 # ---------------- TEST TYPE MAPPING ----------------
 TEST_TYPE_MAPPING = {
