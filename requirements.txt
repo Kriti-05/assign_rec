@@ -1,14 +1,8 @@
 Flask==2.3.3
 requests==2.31.0
 pandas==2.2.3
-pinecone-client==3.2.2
 python-dotenv==1.0.0
 beautifulsoup4==4.12.2
-streamlit==1.29.0
+sentence-transformers==2.7.0 
+pinecone-client==3.2.2
 tqdm==4.66.1
---index-url https://download.pytorch.org/whl/cpu
-torch==2.9.0
-sentence-transformers==2.7.0
-groq==0.33.0
-pytesseract==0.3.13
-gunicorn==21.2.0
